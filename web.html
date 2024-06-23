@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>スリーセブン～７７７～</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(to bottom, #500000, #000000);
+            color: white;
+        }
+        #game-container {
+            display: flex;
+            gap: 20px;
+        }
+        #game-board {
+            width: 300px;
+            height: 600px;
+            border: 2px solid white;
+            position: relative;
+        }
+        .cell {
+            width: 30px;
+            height: 30px;
+            position: absolute;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        #side-panel-left, #side-panel-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        #next-block, #hold-block {
+            width: 120px;
+            height: 120px;
+            border: 2px solid white;
+            position: relative;
+        }
+        #score, #level, #time {
+            margin-top: 20px;
+        }
+        #start-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #start-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="side-panel-left">
+            <div id="level">レベル: 1</div>
+            <div id="next-level">次のレベルまで: 1000</div>
+            <div id="total-score">合計スコア: 0</div>
+        </div>
+        <div id="game-board"></div>
+        <div id="side-panel-right">
+            <div id="next-block"></div>
+            <div id="hold-block"></div>
+            <div id="score">スコア: 0</div>
+            <div id="time">経過時間: 00:00</div>
+            <button id="start-button" onclick="startGame()">ゲーム開始</button>
+        </div>
+    </div>
+    <script>
+        const ROWS = 20;
+        const COLS = 10;
+        const CELL_SIZE = 30;
+        const COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#D7BDE2'];
+
+        let gameBoard = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+        let currentBlock = null;
+        let nextBlock = null;
+        let holdBlock = null;
+        let score = 0;
+        let level = 1;
+        let totalScore = 0;
+        let gameInterval = null;
+        let startTime = null;
+        let gameStarted = false;
+
+        const gameBoardElement = document.getElementById('game-board');
+        const nextBlockElement = document.getElementById('next-block');
+        const holdBlockElement = document.getElementById('hold-block');
+        const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
+        const totalScoreElement = document.getElementById('total-score');
+        const timeElement = document.getElementById('time');
+        const startButton = document.getElementById('start-button');
+        const nextLevelElement = document.getElementById('next-level');
+
+        const SHAPES = [
+            [[1,1], [1,1]],
+            [[1,1,1], [0,1,0]],
+            [[1,1,0], [0,1,1]],
+            [[0,1,1], [1,1,0]],
+            [[1,1,1,1]],
+            [[1,1,1], [1,0,0]],
+            [[1,1,1], [0,0,1]]
+        ];
+
+        function createBlock() {
+            const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+            const numbers = shape.map(row => row.map(cell => cell ? Math.floor(Math.random() * 7) + 1 : 0));
+            return {
+                shape: numbers,
+                x: Math.floor((COLS - numbers[0].length) / 2),
+                y: 0,
+                color: COLORS[Math.floor(Math.random() * COLORS.length)]
+            };
+        }
+
+        function drawBoard() {
+            gameBoardElement.innerHTML = '';
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (gameBoard[y][x] !== 0) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell';
+                        cell.style.left = `${x * CELL_SIZE}px`;
+                        cell.style.top = `${y * CELL_SIZE}px`;
+                        cell.style.backgroundColor = COLORS[gameBoard[y][x] - 1];
+                        cell.textContent = gameBoard[y][x];
+                        gameBoardElement.appendChild(cell);
+                    }
+                }
+            }
+        }
+
+        function drawBlock(block, element) {
+            element.innerHTML = '';
+            if (block) {
+                block.shape.forEach((row, y) => {
+                    row.forEach((cell, x) => {
+                        if (cell !== 0) {
+                            const cellElement = document.createElement('div');
+                            cellElement.className = 'cell';
+                            cellElement.style.backgroundColor = block.color;
+                            cellElement.textContent = cell;
+                            cellElement.style.left = `${x * CELL_SIZE}px`;
+                            cellElement.style.top = `${y * CELL_SIZE}px`;
+                            element.appendChild(cellElement);
+                        }
+                    });
+                });
+            }
+        }
+
+        function moveBlock(dx, dy) {
+            if (!currentBlock || !gameStarted) return;
+            const newX = currentBlock.x + dx;
+            const newY = currentBlock.y + dy;
+            if (isValidMove(newX, newY, currentBlock.shape)) {
+                currentBlock.x = newX;
+                currentBlock.y = newY;
+                drawBoard();
+                drawCurrentBlock();
+            } else if (dy > 0) {
+                placeBlock();
+            }
+        }
+
+        function rotateBlock() {
+            if (!currentBlock || !gameStarted) return;
+            const newShape = currentBlock.shape[0].map((_, index) =>
+                currentBlock.shape.map(row => row[index]).reverse()
+            );
+            if (isValidMove(currentBlock.x, currentBlock.y, newShape)) {
+                currentBlock.shape = newShape;
+                drawBoard();
+                drawCurrentBlock();
+            }
+        }
+
+        function isValidMove(x, y, shape) {
+            return shape.every((row, dy) =>
+                row.every((cell, dx) =>
+                    cell === 0 || (
+                        x + dx >= 0 &&
+                        x + dx < COLS &&
+                        y + dy < ROWS &&
+                        (y + dy < 0 || gameBoard[y + dy][x + dx] === 0)
+                    )
+                )
+            );
+        }
+
+        function placeBlock() {
+            currentBlock.shape.forEach((row, y) => {
+                row.forEach((cell, x) => {
+                    if (cell !== 0 && currentBlock.y + y >= 0) {
+                        gameBoard[currentBlock.y + y][currentBlock.x + x] = cell;
+                    }
+                });
+            });
+            checkAndRemove();
+            currentBlock = nextBlock;
+            nextBlock = createBlock();
+            drawBlock(nextBlock, nextBlockElement);
+            if (!isValidMove(currentBlock.x, currentBlock.y, currentBlock.shape)) {
+                endGame();
+            } else {
+                drawCurrentBlock();
+            }
+        }
+
+        function checkLine(y) {
+            let horizontalSum = 0;
+            let horizontalSevens = 0;
+            for (let x = 0; x < COLS; x++) {
+                if (gameBoard[y][x] !== 0) {
+                    horizontalSum += gameBoard[y][x];
+                    if (gameBoard[y][x] === 7) {
+                        horizontalSevens++;
+                    }
+                }
+            }
+            return horizontalSum === 7 || horizontalSevens >= 3;
+        }
+
+        function checkColumn(x) {
+            let verticalSum = 0;
+            let verticalSevens = 0;
+
+            for (let y = 0; y < ROWS; y++) {
+                if (gameBoard[y][x] !== 0) {
+                    verticalSum += gameBoard[y][x];
+                    if (gameBoard[y][x] === 7) {
+                        verticalSevens++;
+                        if (verticalSevens >= 3) {
+                            return true;
+                        }
+                    } else {
+                        verticalSevens = 0;
+                    }
+                } else {
+                    verticalSum = 0;
+                    verticalSevens = 0;
+                }
+                if (verticalSum === 7) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function removeLine(y) {
+            for (let i = y; i > 0; i--) {
+                gameBoard[i] = [...gameBoard[i - 1]];
+            }
+            gameBoard[0] = Array(COLS).fill(0);
+        }
+
+        function removeColumn(x) {
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (gameBoard[y][x] !== 0) {
+                    for (let i = y; i > 0; i--) {
+                        gameBoard[i][x] = gameBoard[i - 1][x];
+                    }
+                    gameBoard[0][x] = 0;
+                }
+            }
+        }
+
+        function checkAndRemove() {
+            let linesRemoved = 0;
+            for (let y = 0; y < ROWS; y++) {
+                if (checkLine(y)) {
+                    removeLine(y);
+                    linesRemoved++;
+                }
+            }
+            for (let x = 0; x < COLS; x++) {
+                if (checkColumn(x)) {
+                    removeColumn(x);
+                    linesRemoved++;
+                }
+            }
+            if (linesRemoved > 0) {
+                updateScore(linesRemoved);
+            }
+        }
+
+        function updateScore(linesRemoved) {
+            const baseScore = linesRemoved * 100;
+            const levelBonus = level * 10;
+            score += baseScore + levelBonus;
+            totalScore += baseScore + levelBonus;
+            scoreElement.textContent = `スコア: ${score}`;
+            totalScoreElement.textContent = `合計スコア: ${totalScore}`;
+            checkLevelUp();
+        }
+
+        function checkLevelUp() {
+            const nextLevelScore = level * 1000;
+            if (score >= nextLevelScore) {
+                level++;
+                levelElement.textContent = `レベル: ${level}`;
+                clearInterval(gameInterval);
+                gameInterval = setInterval(gameLoop, 1000 - (level * 50));
+            }
+            nextLevelElement.textContent = `次のレベルまで: ${nextLevelScore - score}`;
+        }
+
+        function drawCurrentBlock() {
+            if (!currentBlock) return;
+            currentBlock.shape.forEach((row, y) => {
+                row.forEach((cell, x) => {
+                    if (cell !== 0) {
+                        const cellElement = document.createElement('div');
+                        cellElement.className = 'cell';
+                        cellElement.style.left = `${(currentBlock.x + x) * CELL_SIZE}px`;
+                        cellElement.style.top = `${(currentBlock.y + y) * CELL_SIZE}px`;
+                        cellElement.style.backgroundColor = currentBlock.color;
+                        cellElement.textContent = cell;
+                        gameBoardElement.appendChild(cellElement);
+                    }
+                });
+            });
+        }
+
+        function gameLoop() {
+            moveBlock(0, 1);
+            updateTime();
+        }
+
+        function updateTime() {
+            if (!startTime) return;
+            const currentTime = new Date();
+            const elapsedTime = Math.floor((currentTime - startTime) / 1000);
+            const minutes = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
+            const seconds = (elapsedTime % 60).toString().padStart(2, '0');
+            timeElement.textContent = `経過時間: ${minutes}:${seconds}`;
+        }
+
+        function holdCurrentBlock() {
+            if (!currentBlock || !gameStarted) return;
+            if (holdBlock) {
+                [currentBlock, holdBlock] = [holdBlock, currentBlock];
+                currentBlock.x = Math.floor((COLS - currentBlock.shape[0].length) / 2);
+                currentBlock.y = 0;
+            } else {
+                holdBlock = currentBlock;
+                currentBlock = nextBlock;
+                nextBlock = createBlock();
+            }
+            drawBlock(holdBlock, holdBlockElement);
+            drawBlock(nextBlock, nextBlockElement);
+            drawBoard();
+            drawCurrentBlock();
+        }
+
+        function startGame() {
+            if (gameStarted) return;
+            gameStarted = true;
+            gameBoard = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+            currentBlock = createBlock();
+            nextBlock = createBlock();
+            score = 0;
+            level = 1;
+            totalScore = 0;
+            startTime = new Date();
+            drawBlock(nextBlock, nextBlockElement);
+            drawBoard();
+            drawCurrentBlock();
+            gameInterval = setInterval(gameLoop, 1000);
+            startButton.textContent = 'ゲーム中';
+            startButton.disabled = true;
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            alert(`ゲームオーバー！\nスコア: ${score}\n合計スコア: ${totalScore}`);
+            gameStarted = false;
+            startButton.textContent = 'ゲーム開始';
+            startButton.disabled = false;
+        }
+
+        window.startGame = startGame;  // startGameをグローバルスコープに定義
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Shift') {
+                rotateBlock();
+            }
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (!gameStarted) return;
+            switch (event.key) {
+                case 'ArrowLeft':
+                    moveBlock(-1, 0);
+                    break;
+                case 'ArrowRight':
+                    moveBlock(1, 0);
+                    break;
+                case 'ArrowDown':
+                    moveBlock(0, 1);
+                    break;
+                case 'ArrowUp':
+                    rotateBlock();
+                    break;
+                case ' ':
+                    holdCurrentBlock();
+                    break;
+            }
+        });
+    </script>
+</body>
+</html>
