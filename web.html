@@ -9,15 +9,29 @@
             font-family: Arial, sans-serif;
             display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: flex-start;
             height: 100vh;
             margin: 0;
             background: linear-gradient(to bottom, #500000, #000000);
             color: white;
         }
+        #container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+        #rules {
+            width: 33%;
+            padding: 20px;
+            box-sizing: border-box;
+            border-right: 2px solid white;
+        }
         #game-container {
             display: flex;
             gap: 20px;
+            width: 67%;
+            padding: 20px;
+            box-sizing: border-box;
         }
         #game-board {
             width: 300px;
@@ -66,19 +80,31 @@
     </style>
 </head>
 <body>
-    <div id="game-container">
-        <div id="side-panel-left">
-            <div id="level">レベル: 1</div>
-            <div id="next-level">次のレベルまで: 1000</div>
-            <div id="total-score">合計スコア: 0</div>
+    <div id="container">
+        <div id="rules">
+            <h2>READMEのルール</h2>
+            <ul>
+                <li>ゲームの目的はスコアを稼ぐことです。</li>
+                <li>ブロックを回転させるにはShiftキーを押します。</li>
+                <li>ブロックを左右に移動させるには矢印キーを使用します。</li>
+                <li>ブロックをホールドするにはスペースキーを押します。</li>
+                <li>ゲームを開始するには「ゲーム開始」ボタンを押します。</li>
+            </ul>
         </div>
-        <div id="game-board"></div>
-        <div id="side-panel-right">
-            <div id="next-block"></div>
-            <div id="hold-block"></div>
-            <div id="score">スコア: 0</div>
-            <div id="time">経過時間: 00:00</div>
-            <button id="start-button" onclick="startGame()">ゲーム開始</button>
+        <div id="game-container">
+            <div id="side-panel-left">
+                <div id="level">レベル: 1</div>
+                <div id="next-level">次のレベルまで: 1000</div>
+                <div id="total-score">合計スコア: 0</div>
+            </div>
+            <div id="game-board"></div>
+            <div id="side-panel-right">
+                <div id="next-block"></div>
+                <div id="hold-block"></div>
+                <div id="score">スコア: 0</div>
+                <div id="time">経過時間: 00:00</div>
+                <button id="start-button" onclick="startGame()">ゲーム開始</button>
+            </div>
         </div>
     </div>
     <script>
